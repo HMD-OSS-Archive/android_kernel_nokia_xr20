@@ -16,7 +16,7 @@
 static struct kobject *bootinfo_kobj = NULL;
 
 const u8 * sub_front_camera[]={"sub_front_camera not found!","Sunny_s5kgd1sp","Seasons_s5k4h7"}; //front_camera module information
-const u8 * main_camera[]={"main_camera not found!","Qtech_s5kgm1st","Qtech_s5kgw3sp"}; // main_camera module information
+const u8 * main_camera[]={"main_camera not found!","Qtech_s5kgm1st","Qtech_s5kgw3sp","Truly_hi4821q"}; // main_camera module information
 const u8 * wide_camera[]={"wide_camera not found!","Seasons_gc5035","Cxt_gc5035"}; //wide_camera module information
 const u8 * depth_camera[]={"depth_camera not found!","Seasons_gc02m1b","Cxt_ov02b1b"}; //depth_camera module information
 const u8 * macro_camera[]={"macro_camera not found!","Seasons_gc02m1","Cxt_ov02b10"}; //macro_camera module information
@@ -595,7 +595,7 @@ static struct kobj_attribute i2c_devices_info_attr = {
 #if  defined (CONFIG_ARM64)  //Titan_TL PRJ
 int get_pa_num(void)
 {
-     //add by pare for modem gpio check
+
 #define GPIO_VERSION_PIN1    (GPIO95 | 0x80000000)
 #define GPIO_VERSION_PIN2    (GPIO96 | 0x80000000)
 #define GPIO_VERSION_PIN3    (GPIO93 | 0x80000000)
@@ -664,7 +664,7 @@ int get_pa_num(void)
 //baixue add for disable second PA
       return 0;
 
-     //add by pare for modem gpio check
+
 #define GPIO_VERSION_PIN1    (GPIO96 | 0x80000000)
 	
 	int pin1_val = 0, pin2_val = 0;

@@ -31,11 +31,11 @@ ifeq ($(BUILD_THETHING_PROJECT),true)
  subdir-ccflags-y += -DBUILD_THETHING_PROJECT
 endif
 
-#add by milan.zhong for punisher audio bringup,20210316,start
+
 ifeq ($(BUILD_PUNISHER_PROJECT),true)
  subdir-ccflags-y += -DTARGET_PRODUCT_PUNISHER
 endif
-#add by milan.zhong for punisher audio bringup,20210316,end
+
 
 obj-$(CONFIG_CHARGER_IDT_P9415)        += qcom_idtp9415_wireless_power.o
 qcom_idtp9415_wireless_power-y += idtp9415_wireless_power.o pmic-voter.o
@@ -43,3 +43,5 @@ qcom_idtp9415_wireless_power-y += idtp9415_wireless_power.o pmic-voter.o
 obj-$(CONFIG_SMB1351_USB_CHARGER)	+= smb1351-charger.o pmic-voter.o
 obj-$(CONFIG_SMB1390_CHARGE_PUMP_PSY)   += qcom-smb1390-charger.o
 qcom-smb1390-charger-y += smb1390-charger-psy.o pmic-voter.o
+obj-$(CONFIG_QTI_QBG)	+= qti-qbg-main.o
+qti-qbg-main-y	+= qti-qbg.o qbg-sdam.o qbg-battery-profile.o battery-profile-loader.o

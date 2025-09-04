@@ -19,6 +19,7 @@
 #include <linux/pmic-voter.h>
 #include <linux/ktime.h>
 #include <linux/usb/typec.h>
+#include <linux/alarmtimer.h>
 #include "smb5-lib.h"
 #include "smb5-reg.h"
 #include "schgm-flash.h"
@@ -34,7 +35,7 @@
 #define smblib_dbg(chg, reason, fmt, ...)			\
 	do {							\
 		if (*chg->debug_mask & (reason))		\
-			pr_info("%s: %s: " fmt, chg->name,	\
+			pr_debug("%s: %s: " fmt, chg->name,	\
 				__func__, ##__VA_ARGS__);	\
 		else						\
 			pr_debug("%s: %s: " fmt, chg->name,	\
@@ -802,6 +803,7 @@ static int smblib_set_usb_pd_fsw(struct smb_charger *chg, int voltage)
 
 #define CONT_AICL_HEADROOM_MV		1000
 #define AICL_THRESHOLD_MV_IN_CC		5000
+#define VSAFE5V_SETTLE_US		40000
 static int smblib_set_usb_pd_allowed_voltage(struct smb_charger *chg,
 					int min_allowed_uv, int max_allowed_uv)
 {
@@ -826,6 +828,14 @@ static int smblib_set_usb_pd_allowed_voltage(struct smb_charger *chg,
 				min_allowed_uv, max_allowed_uv);
 		return -EINVAL;
 	}
+
+	/*
+	 * usbin-ov interrupt is seen with some USBPD adapters when moving
+	 * from 9V to 5V. To avoid this, add delay here to wait VBUS voltage
+	 * settled before updating VBUS allowance to 5V.
+	 */
+	if (vbus_allowance == FORCE_5V)
+		usleep_range(VSAFE5V_SETTLE_US, VSAFE5V_SETTLE_US + 1);
 
 	rc = smblib_usb_pd_adapter_allowance_override(chg, vbus_allowance);
 	if (rc < 0) {
@@ -1369,6 +1379,7 @@ static void smblib_uusb_removal(struct smb_charger *chg)
 	}
 
 	chg->qc3p5_detected = false;
+	chg->qc3p5_detected_mw = 0;
 	smblib_update_usb_type(chg);
 }
 
@@ -2086,13 +2097,7 @@ int smblib_get_prop_batt_status(struct smb_charger *chg,
 			return 0;
 		}
 	}
-#if IS_ENABLED (CONFIG_CHARGER_IDT_P9415)
-	if(idt_wls_present){
-		val->intval = POWER_SUPPLY_STATUS_CHARGING;
-		pr_err("idt is online,charging status");
-		return 0;
-	}
-#endif/*CONFIG_CHARGER_IDT_P9415*/
+
 	rc = smblib_get_prop_batt_health(chg, &pval);
 	if (rc < 0) {
 		smblib_err(chg, "Couldn't get batt health rc=%d\n", rc);
@@ -2532,7 +2537,6 @@ int smblib_set_prop_system_temp_level(struct smb_charger *chg,
 
 	vote(chg->fcc_votable, THERMAL_DAEMON_VOTER, true,
 			chg->thermal_mitigation[chg->system_temp_level]);
-
 	return 0;
 }
 
@@ -3180,13 +3184,6 @@ int smblib_get_prop_dc_present(struct smb_charger *chg,
 		return 0;
 	}
 
-#if IS_ENABLED (CONFIG_CHARGER_IDT_P9415)
-	if(idt_wls_present){
-		val->intval = 1;
-		pr_err("idt is present");
-		return 0;
-	}
-#endif /*CONFIG_CHARGER_IDT_P9415*/
 	rc = smblib_read(chg, DCIN_BASE + INT_RT_STS_OFFSET, &stat);
 	if (rc < 0) {
 		smblib_err(chg, "Couldn't read DCIN_RT_STS rc=%d\n", rc);
@@ -3218,13 +3215,7 @@ int smblib_get_prop_dc_online(struct smb_charger *chg,
 		rc = smblib_get_prop_dc_present(chg, val);
 		return rc;
 	}
-#if	IS_ENABLED (CONFIG_CHARGER_IDT_P9415)
-	if(idt_wls_present){
-		val->intval = 1;
-		pr_err("idt is online");
-		return rc;
-	}
-#endif /*CONFIG_CHARGER_IDT_P9415*/
+
 	rc = smblib_read(chg, POWER_PATH_STATUS_REG, &stat);
 	if (rc < 0) {
 		smblib_err(chg, "Couldn't read POWER_PATH_STATUS rc=%d\n",
@@ -4144,6 +4135,25 @@ int smblib_get_prop_usb_current_now(struct smb_charger *chg,
 	return rc;
 }
 
+#ifdef CONFIG_HS_CHARGE_FG_FUNCTION
+static void smblib_initial_recheck_otg_work(struct work_struct *work)
+{
+	struct smb_charger *chg = container_of(work, struct smb_charger,
+						initial_recheck_otg_work.work);
+	struct smb_irq_data irq_data = {chg, "initial-recheck-otg-status"};
+	int prop_val = 0;
+	int dfp_mode = smblib_get_prop_dfp_mode(chg);
+
+	smblib_get_prop_typec_cc_orientation(chg, &prop_val);
+
+	smblib_err(chg,"%s: typec_cc_orientation=%d, otg_present=%d dfp_mode=%d\n",
+		__func__, prop_val, chg->otg_present, dfp_mode);
+	if ((prop_val != 0) && !chg->otg_present
+		&& (dfp_mode != QTI_POWER_SUPPLY_TYPEC_NONE))
+		smb5_typec_attach_detach_irq_handler(0, &irq_data);
+}
+#endif /*CONFIG_HS_CHARGE_FG_FUNCTION*/
+
 int smblib_get_prop_low_power(struct smb_charger *chg,
 					  union power_supply_propval *val)
 {
@@ -4677,6 +4687,13 @@ int smblib_set_prop_typec_power_role(struct smb_charger *chg, int val)
 
 	smblib_dbg(chg, PR_MISC, "power role change: %d --> %d!",
 			chg->power_role, val);
+
+#ifdef CONFIG_HS_TYPEC_OTG_CONTROL_FUNCTION
+	if (chg->disable_otg && val == QTI_POWER_SUPPLY_TYPEC_PR_DUAL){
+		smblib_dbg(chg, PR_MISC, "disable_otg, ignore DUAL!\n");
+		goto unlock;
+	}
+#endif /* CONFIG_HS_TYPEC_OTG_CONTROL_FUNCTION */
 
 	/* Force the power-role if the initial value is NONE, for the legacy cable detection WA. */
 	if (chg->power_role == val && chg->power_role != QTI_POWER_SUPPLY_TYPEC_PR_NONE) {
@@ -5266,7 +5283,7 @@ irqreturn_t smb5_default_irq_handler(int irq, void *data)
 	}
 #endif /*CONFIG_HS_CHARGE_FG_FUNCTION*/
 //merged by changxue.fang for thething charge,20210421,end
-	smblib_dbg(chg, PR_OTHER, "IRQ: %s\n", irq_data->name); /* modify by ontim */
+	smblib_dbg(chg, PR_OTHER, "IRQ: %s\n", irq_data->name);
 	return IRQ_HANDLED;
 }
 
@@ -5341,7 +5358,9 @@ static void smblib_eval_chg_termination(struct smb_charger *chg, u8 batt_status)
 	 * battery. Trigger the charge termination WA once charging is completed
 	 * to prevent overcharing.
 	 */
-	if ((batt_status == TERMINATE_CHARGE) && (pval.intval == 100)) {
+	if ((batt_status == TERMINATE_CHARGE) && (pval.intval == 100) &&
+		(ktime_to_ms(alarm_expires_remaining(/* alarm not pending */
+				&chg->chg_termination_alarm)) <= 0)) {
 		chg->cc_soc_ref = 0;
 		chg->last_cc_soc = 0;
 		chg->term_vbat_uv = 0;
@@ -5918,14 +5937,14 @@ irqreturn_t smb5_usb_plugin_irq_handler(int irq, void *data)
 static void smblib_handle_slow_plugin_timeout(struct smb_charger *chg,
 					      bool rising)
 {
-	smblib_dbg(chg, PR_OTHER, "IRQ: slow-plugin-timeout %s\n",  /* modify by ontim */
+	smblib_dbg(chg, PR_OTHER, "IRQ: slow-plugin-timeout %s\n",
 		   rising ? "rising" : "falling");
 }
 
 static void smblib_handle_sdp_enumeration_done(struct smb_charger *chg,
 					       bool rising)
 {
-	smblib_dbg(chg, PR_OTHER, "IRQ: sdp-enumeration-done %s\n",  /* modify by ontim */
+	smblib_dbg(chg, PR_OTHER, "IRQ: sdp-enumeration-done %s\n",
 		   rising ? "rising" : "falling");
 }
 
@@ -5971,7 +5990,7 @@ static void smblib_handle_hvdcp_3p0_auth_done(struct smb_charger *chg,
 		}
 	}
 
-	smblib_dbg(chg, PR_OTHER, "IRQ: hvdcp-3p0-auth-done rising; %s detected\n",  /* modify by ontim */
+	smblib_dbg(chg, PR_OTHER, "IRQ: hvdcp-3p0-auth-done rising; %s detected\n",
 		   apsd_result->name);
 }
 
@@ -6002,7 +6021,7 @@ static void smblib_handle_hvdcp_check_timeout(struct smb_charger *chg,
 		}
 	}
 
-	smblib_dbg(chg, PR_OTHER, "IRQ: %s %s\n", __func__,  /* modify by ontim */
+	smblib_dbg(chg, PR_OTHER, "IRQ: %s %s\n", __func__,
 		   rising ? "rising" : "falling");
 }
 
@@ -6010,7 +6029,7 @@ static void smblib_handle_hvdcp_check_timeout(struct smb_charger *chg,
 static void smblib_handle_hvdcp_detect_done(struct smb_charger *chg,
 					    bool rising)
 {
-	smblib_dbg(chg, PR_OTHER, "IRQ: hvdcp-detect-done %s\n", /* modify by ontim */
+	smblib_dbg(chg, PR_OTHER, "IRQ: hvdcp-detect-done %s\n",
 		   rising ? "rising" : "falling");
 }
 
@@ -6176,7 +6195,7 @@ irqreturn_t smb5_usb_source_change_irq_handler(int irq, void *data)
 		smblib_err(chg, "Couldn't read APSD_STATUS rc=%d\n", rc);
 		return IRQ_HANDLED;
 	}
-	smblib_dbg(chg, PR_OTHER, "APSD_STATUS = 0x%02x\n", stat);  /* modify by ontim */
+	smblib_dbg(chg, PR_OTHER, "APSD_STATUS = 0x%02x\n", stat);
 
 	return IRQ_HANDLED;
 }
@@ -6293,6 +6312,10 @@ static void typec_sink_insertion(struct smb_charger *chg)
 		chg->otg_present = true;
 	}
 
+#ifdef CONFIG_HS_TYPEC_OTG_CONTROL_FUNCTION
+	chg->otg_present = true;
+#endif /*CONFIG_HS_TYPEC_OTG_CONTROL_FUNCTION*/
+
 	if (!chg->pr_swap_in_progress)
 		chg->ok_to_pd = (!(chg->pd_disabled) || chg->early_usb_attach)
 					&& !chg->pd_not_supported;
@@ -6339,6 +6362,13 @@ static const char * const dr_mode_text[] = {
 static int smblib_force_dr_mode(struct smb_charger *chg, int mode)
 {
 	int rc = 0;
+
+#ifdef CONFIG_HS_TYPEC_OTG_CONTROL_FUNCTION
+	if (chg->disable_otg) {
+		smblib_err(chg, "chg->disable_otg true, set mode (%d) to SNK\n", mode);
+		mode = TYPEC_PORT_SNK;
+	}
+#endif /* CONFIG_HS_TYPEC_OTG_CONTROL_FUNCTION */
 
 	switch (mode) {
 	case TYPEC_PORT_SNK:
@@ -6485,6 +6515,9 @@ static void typec_sink_removal(struct smb_charger *chg)
 			smblib_notify_usb_host(chg, false);
 		chg->otg_present = false;
 	}
+#ifdef CONFIG_HS_TYPEC_OTG_CONTROL_FUNCTION
+	chg->otg_present = false;
+#endif /*CONFIG_HS_TYPEC_OTG_CONTROL_FUNCTION*/
 }
 
 static void typec_src_removal(struct smb_charger *chg)
@@ -6505,6 +6538,7 @@ static void typec_src_removal(struct smb_charger *chg)
 			"Couldn't disable secondary charger rc=%d\n", rc);
 
 	chg->qc3p5_detected = false;
+	chg->qc3p5_detected_mw = 0;
 	typec_src_fault_condition_cfg(chg, false);
 	smblib_hvdcp_detect_try_enable(chg, false);
 	smblib_update_usb_type(chg);
@@ -7091,7 +7125,7 @@ irqreturn_t smb5_dc_plugin_irq_handler(int irq, void *data)
 
 	if (dcin_present && !vbus_present) {
 		cancel_work_sync(&chg->dcin_aicl_work);
-#ifndef CONFIG_CHARGER_IDT_P9415
+
 		/* Reset DCIN ICL to 100 mA */
 		mutex_lock(&chg->dcin_aicl_lock);
 		rc = smblib_set_charge_param(chg, &chg->param.dc_icl,
@@ -7101,7 +7135,7 @@ irqreturn_t smb5_dc_plugin_irq_handler(int irq, void *data)
 			return IRQ_HANDLED;
 
 		smblib_dbg(chg, (PR_WLS | PR_INTERRUPT), "reset: icl: 100 mA\n");
-#endif /*CONFIG_CHARGER_IDT_P9415*/
+
 		/*
 		 * Remove USB's CP ILIM vote - inapplicable for wireless
 		 * parallel charging.
@@ -7149,9 +7183,8 @@ irqreturn_t smb5_dc_plugin_irq_handler(int irq, void *data)
 				dev_err(chg->dev, "Couldn't set dc voltage to 5 V rc=%d\n",
 					rc);
 		}
-#ifndef CONFIG_CHARGER_IDT_P9415
+
 		schedule_work(&chg->dcin_aicl_work);
-#endif /*CONFIG_CHARGER_IDT_P9415*/
 #if IS_ENABLED (CONFIG_CHARGER_IDT_P9415)
 		chg->real_charger_type = POWER_SUPPLY_TYPE_WIRELESS;
 		//vote(chg->fcc_votable, DC_LIMIT_VOTER, true , 2000000);
@@ -7298,7 +7331,7 @@ irqreturn_t smb5_wdog_snarl_irq_handler(int irq, void *data)
 	struct smb_irq_data *irq_data = data;
 	struct smb_charger *chg = irq_data->parent_data;
 
-	smblib_dbg(chg, PR_OTHER, "IRQ: %s\n", irq_data->name); /* modify by ontim */
+	smblib_dbg(chg, PR_OTHER, "IRQ: %s\n", irq_data->name);
 
 	if (chg->wa_flags & SW_THERM_REGULATION_WA) {
 		cancel_delayed_work_sync(&chg->thermal_regulation_work);
@@ -7317,7 +7350,7 @@ irqreturn_t smb5_wdog_bark_irq_handler(int irq, void *data)
 	struct smb_charger *chg = irq_data->parent_data;
 	int rc;
 
-	smblib_dbg(chg, PR_OTHER, "IRQ: %s\n", irq_data->name);  /* modify by ontim */
+	smblib_dbg(chg, PR_OTHER, "IRQ: %s\n", irq_data->name);
 
 	rc = smblib_write(chg, BARK_BITE_WDOG_PET_REG, BARK_BITE_WDOG_PET_BIT);
 	if (rc < 0)
@@ -7477,6 +7510,21 @@ int smblib_set_prop_pr_swap_in_progress(struct smb_charger *chg,
 			return rc;
 		}
 
+#ifdef CONFIG_HS_TYPEC_OTG_CONTROL_FUNCTION
+		if (chg->disable_otg) {
+			rc = smblib_masked_write(chg, TYPE_C_MODE_CFG_REG,
+						TYPEC_POWER_ROLE_CMD_MASK | TYPEC_TRY_MODE_MASK,
+						EN_SNK_ONLY_BIT);
+			if (rc < 0) {
+				smblib_err(chg, "Couldn't enable SINK rc=%d\n", rc);
+				return rc;
+			}
+			chg->power_role = QTI_POWER_SUPPLY_TYPEC_PR_SINK;
+			smblib_dbg(chg, PR_MISC, "restore power role: %d, chg->disable_otg is true.\n",
+					chg->power_role);
+			return 0;
+		}
+#endif /* CONFIG_HS_TYPEC_OTG_CONTROL_FUNCTION */
 		/* enable DRP */
 		rc = smblib_masked_write(chg, TYPE_C_MODE_CFG_REG,
 				 TYPEC_POWER_ROLE_CMD_MASK, 0);
@@ -8166,6 +8214,49 @@ out:
 	chg->jeita_configured = JEITA_CFG_FAILURE;
 }
 
+void smblib_moisture_detection_enable(struct smb_charger *chg, int pval)
+{
+	int rc, input_present, val;
+
+	if (chg->pd_disabled)
+		return;
+
+	smblib_is_input_present(chg, &input_present);
+
+	if (pval) {
+		chg->lpd_disabled = false;
+		pr_debug("Moisture detection enabled\n");
+		if (input_present)
+			schedule_delayed_work(&chg->lpd_ra_open_work,
+					msecs_to_jiffies(300));
+		return;
+	}
+
+	chg->lpd_disabled = true;
+
+	if (!is_client_vote_enabled(chg->usb_icl_votable, LPD_VOTER))
+		goto done;
+
+	cancel_delayed_work_sync(&chg->lpd_ra_open_work);
+
+	alarm_cancel(&chg->lpd_recheck_timer);
+
+	vote(chg->usb_icl_votable, LPD_VOTER, false, 0);
+	/* restore DRP mode */
+	val = QTI_POWER_SUPPLY_TYPEC_PR_DUAL;
+	rc = smblib_set_prop_typec_power_role(chg, val);
+	if (rc < 0) {
+		smblib_err(chg, "Failed to set power-role to DRP rc=%d\n",
+						rc);
+		return;
+	}
+
+	chg->lpd_reason = LPD_NONE;
+	chg->lpd_stage = LPD_STAGE_NONE;
+done:
+	pr_debug("Moisture detection disabled\n");
+}
+
 static void smblib_lpd_ra_open_work(struct work_struct *work)
 {
 	struct smb_charger *chg = container_of(work, struct smb_charger,
@@ -8173,7 +8264,7 @@ static void smblib_lpd_ra_open_work(struct work_struct *work)
 	u8 stat;
 	int rc, val;
 
-	if (chg->pr_swap_in_progress || chg->pd_hard_reset) {
+	if (chg->pr_swap_in_progress || chg->pd_hard_reset || chg->lpd_disabled) {
 		chg->lpd_stage = LPD_STAGE_NONE;
 		goto out;
 	}
@@ -8491,6 +8582,9 @@ int smblib_init(struct smb_charger *chg)
 					smblib_pr_swap_detach_work);
 	INIT_DELAYED_WORK(&chg->pr_lock_clear_work,
 					smblib_pr_lock_clear_work);
+ #ifdef CONFIG_HS_CHARGE_FG_FUNCTION
+	INIT_DELAYED_WORK(&chg->initial_recheck_otg_work, smblib_initial_recheck_otg_work);
+ #endif /*CONFIG_HS_CHARGE_FG_FUNCTION*/
 	timer_setup(&chg->apsd_timer, apsd_timer_cb, 0);
 
 	INIT_DELAYED_WORK(&chg->role_reversal_check,
@@ -8665,6 +8759,9 @@ int smblib_deinit(struct smb_charger *chg)
 		cancel_delayed_work_sync(&chg->usbov_dbc_work);
 		cancel_delayed_work_sync(&chg->role_reversal_check);
 		cancel_delayed_work_sync(&chg->pr_swap_detach_work);
+#ifdef CONFIG_HS_CHARGE_FG_FUNCTION
+		cancel_delayed_work_sync(&chg->initial_recheck_otg_work);
+#endif /*CONFIG_HS_CHARGE_FG_FUNCTION*/
 		power_supply_unreg_notifier(&chg->nb);
 		smblib_destroy_votables(chg);
 		qcom_step_chg_deinit();

@@ -91,7 +91,7 @@ static	void	dm_check_txrateandretrycount(struct net_device *dev);
 
 /*---------------------Define local function prototype-----------------------*/
 
-/*---------------------Define of Tx Power Control For Near/Far Range --------*/   /*Add by Jacken 2008/02/18 */
+/*---------------------Define of Tx Power Control For Near/Far Range --------*/
 static	void	dm_init_dynamic_txpower(struct net_device *dev);
 static	void	dm_dynamic_txpower(struct net_device *dev);
 
@@ -197,7 +197,7 @@ void hal_dm_watchdog(struct net_device *dev)
 
 	/*static u8	previous_bssid[6] ={0};*/
 
-	/*Add by amy 2008/05/15 ,porting from windows code.*/
+
 	dm_check_rate_adaptive(dev);
 	dm_dynamic_txpower(dev);
 	dm_check_txrateandretrycount(dev);
@@ -208,7 +208,7 @@ void hal_dm_watchdog(struct net_device *dev)
 	dm_check_rx_path_selection(dev);
 	dm_check_fsync(dev);
 
-	/* Add by amy 2008-05-15 porting from windows code. */
+
 	dm_check_pbc_gpio(dev);
 	dm_send_rssi_tofw(dev);
 	dm_ctstoself(dev);

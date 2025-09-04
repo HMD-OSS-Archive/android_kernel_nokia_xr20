@@ -585,7 +585,7 @@ static void RxReorderIndicatePacket(struct ieee80211_device *ieee,
 
 	prxbIndicateArray = kmalloc_array(REORDER_WIN_SIZE,
 					  sizeof(struct ieee80211_rxb *),
-					  GFP_KERNEL);
+					  GFP_ATOMIC);
 	if (!prxbIndicateArray)
 		return;
 
@@ -1096,7 +1096,7 @@ int ieee80211_rx(struct ieee80211_device *ieee, struct sk_buff *skb,
 	    stype != IEEE80211_STYPE_DATA_CFACK &&
 	    stype != IEEE80211_STYPE_DATA_CFPOLL &&
 	    stype != IEEE80211_STYPE_DATA_CFACKPOLL &&
-	    stype != IEEE80211_STYPE_QOS_DATA//add by David,2006.8.4
+	    stype != IEEE80211_STYPE_QOS_DATA
 	    ) {
 		if (stype != IEEE80211_STYPE_NULLFUNC)
 			IEEE80211_DEBUG_DROP(

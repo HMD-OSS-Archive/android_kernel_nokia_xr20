@@ -758,11 +758,11 @@ static struct pil_reset_ops pil_ops_trusted = {
 	.deinit_image = pil_deinit_image_trusted,
 };
 
-//add by changxue.fang for ramdump subsystem failed reason,20201224,start
+
 #ifdef CONFIG_SUPPORT_CRASH_REASON
 extern void dump_subsys_fault_reason(const char *desc, const char * reason);
 #endif // #ifdef CONFIG_SUPPORT_CRASH_REASON
-//add by changxue.fang for ramdump subsystem failed reason,20201224,end
+
 
 static void log_failure_reason(const struct pil_tz_data *d)
 {
@@ -787,11 +787,11 @@ static void log_failure_reason(const struct pil_tz_data *d)
 	strlcpy(reason, smem_reason, min(size, (size_t)MAX_SSR_REASON_LEN));
 	pr_err("%s subsystem failure reason: %s.\n", name, reason);
 
-	//add by changxue.fang for ramdump subsystem failed reason,20201224,start
+
 	#ifdef CONFIG_SUPPORT_CRASH_REASON
 		dump_subsys_fault_reason(name, reason);
 	#endif // #ifdef CONFIG_SUPPORT_CRASH_REASON
-	//add by changxue.fang for ramdump subsystem failed reason,20201224,end
+
 }
 
 static int subsys_shutdown(const struct subsys_desc *subsys, bool force_stop)
@@ -1120,7 +1120,7 @@ static void unmask_scsr_irqs(struct pil_tz_data *d)
 			~BIT(d->bits_arr[PBL_DONE]), d->irq_mask);
 }
 
-//add by changxue.fang for restart modem,20210118,start
+
 #ifdef CONFIG_SUPPORT_RESTART_MODEM
 struct pil_tz_data *modem_pdata = NULL;
 void restart_modem_by_sysnode(void)
@@ -1134,7 +1134,7 @@ void restart_modem_by_sysnode(void)
 	pr_err("%s: modem_pdata is NULL\n", __func__);
 }
 #endif
-//add by changxue.fang for restart modem,20210118,end
+
 
 static void subsys_enable_all_irqs(struct pil_tz_data *d)
 {
@@ -1581,14 +1581,14 @@ load_from_pil:
 		goto err_subsys;
 	}
 
-    //add by changxue.fang for restart modem,20210118,start
+
     #ifdef CONFIG_SUPPORT_RESTART_MODEM
 	if (d->pas_id == PAS_MODEM_SW) {
 		pr_err("create restart mode node\n");
 		modem_pdata = d;
 	}
 	#endif
-	//add by changxue.fang for restart modem,20210118,end
+
 
 	rc = subsys_setup_irqs(pdev);
 	if (rc) {

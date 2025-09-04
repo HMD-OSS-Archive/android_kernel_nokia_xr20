@@ -257,6 +257,14 @@ void kernel_restart(char *cmd)
 	}
 #endif
 /*req SCW-737,luohao,20210111,add,end*/
+/*req QKS-5107,changmei.chen,20210819,add,begin*/
+#if (defined(HMD_MP_VERSION)) && (defined(BUILD_USER_TYPE_VERSION))
+	if (cmd && !strncmp(cmd, "recovery", 8)) {
+		pr_err("HDM: cmd = %s\n", cmd);
+		cmd = NULL;
+	}
+#endif
+/*req QKS-5107,changmei.chen,20210819,add,end*/
 
 	if (!cmd)
 		pr_emerg("Restarting system\n");
@@ -563,22 +571,22 @@ static int __init reboot_setup(char *str)
 			break;
 
 		case 's':
-		{
-			int rc;
-
-			if (isdigit(*(str+1))) {
-				rc = kstrtoint(str+1, 0, &reboot_cpu);
-				if (rc)
-					return rc;
-			} else if (str[1] == 'm' && str[2] == 'p' &&
-				   isdigit(*(str+3))) {
-				rc = kstrtoint(str+3, 0, &reboot_cpu);
-				if (rc)
-					return rc;
-			} else
+			if (isdigit(*(str+1)))
+				reboot_cpu = simple_strtoul(str+1, NULL, 0);
+			else if (str[1] == 'm' && str[2] == 'p' &&
+							isdigit(*(str+3)))
+				reboot_cpu = simple_strtoul(str+3, NULL, 0);
+			else
 				*mode = REBOOT_SOFT;
+			if (reboot_cpu >= num_possible_cpus()) {
+				pr_err("Ignoring the CPU number in reboot= option. "
+				       "CPU %d exceeds possible cpu number %d\n",
+				       reboot_cpu, num_possible_cpus());
+				reboot_cpu = 0;
 			break;
 		}
+			break;
+
 		case 'g':
 			*mode = REBOOT_GPIO;
 			break;

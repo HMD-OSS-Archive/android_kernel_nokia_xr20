@@ -1059,7 +1059,7 @@ typedef  struct DM_Out_Source_Dynamic_Mechanism_Structure {
 	u8 NdpaPeriod;
 	bool H2C_RARpt_connect;
 
-	/*  add by Yu Cehn for adaptivtiy */
+
 	bool adaptivity_flag;
 	bool NHM_disable;
 	bool TxHangFlg;

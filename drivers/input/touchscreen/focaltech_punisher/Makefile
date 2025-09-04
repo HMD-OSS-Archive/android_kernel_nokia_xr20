@@ -1,18 +1,23 @@
 # Makefile for the focaltech touchscreen drivers.
 
-obj-$(CONFIG_TOUCHSCREEN_FTS) += focaltech_fts.o
-focaltech_fts-y := \
-	focaltech_core.o \
-	focaltech_ex_fun.o \
-	focaltech_ex_mode.o \
-	focaltech_gesture.o \
-	focaltech_esdcheck.o \
-	focaltech_point_report_check.o \
-	focaltech_flash.o \
-	focaltech_spi.o
+obj-$(CONFIG_TOUCHSCREEN_FTS) += focaltech_punisher.o
+focaltech_punisher-y := \
+   focaltech_core.o \
+   focaltech_ex_fun.o \
+   focaltech_ex_mode.o \
+   focaltech_gesture.o \
+   focaltech_esdcheck.o \
+   focaltech_point_report_check.o \
+   focaltech_flash.o \
+   focaltech_spi.o
 
-#add by milan.zhong for punisher audio bringup,20210316,start
+
 ifeq ($(BUILD_PUNISHER_PROJECT),true)
  subdir-ccflags-y += -DTARGET_PRODUCT_PUNISHER
 endif
-#add by milan.zhong for punisher audio bringup,20210316,end
+
+
+ifeq ($(CONFIG_TOUCHSCREEN_FTS),m)
+$(info "punisher Focaltech TP IS BUILT AS DLKM")
+BOARD_VENDOR_KERNEL_MODULES +=  $(KERNEL_MODULES_OUT)/focaltech_punisher.ko
+endif

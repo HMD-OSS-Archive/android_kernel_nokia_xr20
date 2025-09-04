@@ -699,10 +699,10 @@
 
 /*church.zhong add for punisher project 2021-03-12.*/
 #ifdef TARGET_PRODUCT_PUNISHER
-//add by yukai for sar sensor
-#define KEY_SAR_NEAR   0x2ec
-#define KEY_SAR_CLOSE  0x2ed
-#define KEY_SAR_FAR    0x2ef
+
+#define KEY_SAR_NEAR   0x2ec // 748
+#define KEY_SAR_CLOSE  0x2ed // 749
+#define KEY_SAR_FAR    0x2f2 // 754
 #endif
 
 /*

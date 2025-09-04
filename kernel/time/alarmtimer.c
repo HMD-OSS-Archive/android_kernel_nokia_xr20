@@ -63,7 +63,7 @@ static struct rtc_device	*rtcdev;
 static DEFINE_SPINLOCK(rtcdev_lock);
 
 // ning.wei++ for alarm_debug
-static int alarm_debug = 0;
+static int alarm_debug = 1;
 
 module_param_named(alarm_debug, alarm_debug, int, 0644);
 // ning.wei++ for alarm_debug
