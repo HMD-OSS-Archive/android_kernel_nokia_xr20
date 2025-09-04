@@ -35,8 +35,6 @@ struct hgsl_context {
 
 	uint32_t last_ts;
 	struct hgsl_hsync_timeline *timeline;
-	uint32_t queued_ts;
-	bool is_killed;
 };
 
 struct hgsl_priv {
@@ -97,7 +95,6 @@ struct hgsl_hsync_fence {
 
 struct hgsl_isync_timeline {
 	struct kref kref;
-	struct list_head free_list;
 	char name[HGSL_TIMELINE_NAME_LEN];
 	int id;
 	struct hgsl_priv *priv;
@@ -129,7 +126,6 @@ void hgsl_hsync_timeline_put(struct hgsl_hsync_timeline *timeline);
 int hgsl_isync_timeline_create(struct hgsl_priv *priv,
 				    uint32_t *timeline_id);
 int hgsl_isync_timeline_destroy(struct hgsl_priv *priv, uint32_t id);
-void hgsl_isync_fini(struct hgsl_priv *priv);
 int hgsl_isync_fence_create(struct hgsl_priv *priv, uint32_t timeline_id,
 						    uint32_t ts, int *fence);
 int hgsl_isync_fence_signal(struct hgsl_priv *priv, uint32_t timeline_id,

@@ -37,7 +37,6 @@
 #define MAX_NR_TILES 4
 #define PS_HOLD_OFFSET 0x820
 #define QUP_MASK       GENMASK(5, 0)
-#define SPARE_MASK     GENMASK(15, 8)
 
 /**
  * struct msm_pinctrl - state for a pinctrl-msm device
@@ -964,11 +963,6 @@ static void msm_gpio_irq_enable(struct irq_data *d)
 	struct irq_data *dir_conn_data;
 	irq_hw_number_t dir_conn_irq = 0;
 
-	if (test_bit(d->hwirq, pctrl->skip_wake_irqs)) {
-		if (pctrl->mpm_wake_ctl)
-			msm_gpio_mpm_wake_set(d->hwirq, true);
-	}
-
 	/*
 	 * Clear the interrupt that may be pending before we enable
 	 * the line.
@@ -993,10 +987,11 @@ static void msm_gpio_irq_enable(struct irq_data *d)
 	}
 
 	if (test_bit(d->hwirq, pctrl->skip_wake_irqs)) {
-	        if (pctrl->mpm_wake_ctl)
-		        msm_gpio_mpm_wake_set(d->hwirq, true);
-	        return;
+	if (pctrl->mpm_wake_ctl)
+		msm_gpio_mpm_wake_set(d->hwirq, true);
+		return;
 	}
+
 	msm_gpio_irq_clear_unmask(d, true);
 }
 
@@ -1094,11 +1089,10 @@ static void msm_dirconn_uncfg_reg(struct irq_data *d, u32 offset)
 	raw_spin_lock_irqsave(&pctrl->lock, flags);
 	g = &pctrl->soc->groups[d->hwirq];
 
-	writel_relaxed(val, pctrl->regs[g->tile] + g->dir_conn_reg
-		       + (offset * 4));
-	val = msm_readl_intr_cfg(pctrl, g);
+	writel_relaxed(val, pctrl->regs + g->dir_conn_reg + (offset * 4));
+	val = readl_relaxed(pctrl->regs + g->intr_cfg_reg);
 	val &= ~BIT(g->dir_conn_en_bit);
-	msm_writel_intr_cfg(val, pctrl, g);
+	writel_relaxed(val, pctrl->regs + g->intr_cfg_reg);
 	raw_spin_unlock_irqrestore(&pctrl->lock, flags);
 }
 
@@ -1296,6 +1290,7 @@ static int msm_gpio_irq_set_wake(struct irq_data *d, unsigned int on)
 {
 	struct gpio_chip *gc = irq_data_get_irq_chip_data(d);
 	struct msm_pinctrl *pctrl = gpiochip_get_data(gc);
+	unsigned long flags;
 
 	if (d->parent_data)
 		irq_chip_set_wake_parent(d, on);
@@ -1306,7 +1301,11 @@ static int msm_gpio_irq_set_wake(struct irq_data *d, unsigned int on)
 	 * when TLMM is powered on. To allow that, enable the GPIO
 	 * summary line to be wakeup capable at GIC.
 	 */
+	raw_spin_lock_irqsave(&pctrl->lock, flags);
+
 	irq_set_irq_wake(pctrl->irq, on);
+
+	raw_spin_unlock_irqrestore(&pctrl->lock, flags);
 
 	return 0;
 }
@@ -1437,8 +1436,6 @@ static int msm_gpio_init(struct msm_pinctrl *pctrl)
 	pctrl->irq_chip.irq_set_wake = msm_gpio_irq_set_wake;
 	pctrl->irq_chip.irq_set_affinity = msm_gpio_irq_set_affinity;
 	pctrl->irq_chip.irq_set_vcpu_affinity = msm_gpio_irq_set_vcpu_affinity;
-	pctrl->irq_chip.flags = IRQCHIP_MASK_ON_SUSPEND
-				| IRQCHIP_SET_TYPE_MASKED;
 
 	dn = of_parse_phandle(pctrl->dev->of_node, "wakeup-parent", 0);
 	if (dn) {
@@ -1603,45 +1600,6 @@ int msm_qup_read(unsigned int mode)
 
 	return -ENOENT;
 }
-
-int msm_spare_write(int spare_reg, u32 val)
-{
-	u32 offset;
-	const struct msm_spare_tlmm *regs = msm_pinctrl_data->soc->spare_regs;
-	int num_regs =  msm_pinctrl_data->soc->nspare_regs;
-
-	if (!regs || spare_reg >= num_regs)
-		return -ENOENT;
-
-	offset = regs[spare_reg].offset;
-	if (offset != 0) {
-		writel_relaxed(val & SPARE_MASK,
-				msm_pinctrl_data->regs[0] + offset);
-		return 0;
-	}
-
-	return -ENOENT;
-}
-EXPORT_SYMBOL(msm_spare_write);
-
-int msm_spare_read(int spare_reg)
-{
-	u32 offset, val;
-	const struct msm_spare_tlmm *regs = msm_pinctrl_data->soc->spare_regs;
-	int num_regs =  msm_pinctrl_data->soc->nspare_regs;
-
-	if (!regs || spare_reg >= num_regs)
-		return -ENOENT;
-
-	offset = regs[spare_reg].offset;
-	if (offset != 0) {
-		val = readl_relaxed(msm_pinctrl_data->regs[0] + offset);
-		return val & SPARE_MASK;
-	}
-
-	return -ENOENT;
-}
-EXPORT_SYMBOL(msm_spare_read);
 
 /*
  * msm_gpio_mpm_wake_set - API to make interrupt wakeup capable

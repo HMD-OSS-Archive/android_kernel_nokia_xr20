@@ -378,7 +378,7 @@ struct qseecom_client_handle {
 
 struct qseecom_listener_handle {
 	u32               id;
-	bool              register_pending;
+	bool              unregister_pending;
 	bool              release_called;
 };
 
@@ -470,8 +470,6 @@ static void __qseecom_free_coherent_buf(uint32_t size,
 #define QSEECOM_SCM_EBUSY_WAIT_MS 30
 #define QSEECOM_SCM_EBUSY_MAX_RETRY 67
 
-#define QSEE_RESULT_FAIL_APP_BUSY 315
-
 static int __qseecom_scm_call2_locked(uint32_t smc_id, struct scm_desc *desc)
 {
 	int ret = 0;
@@ -479,14 +477,14 @@ static int __qseecom_scm_call2_locked(uint32_t smc_id, struct scm_desc *desc)
 
 	do {
 		ret = qcom_scm_qseecom_call_noretry(smc_id, desc);
-		if ((ret == -EBUSY) || (desc && (desc->ret[0] == -QSEE_RESULT_FAIL_APP_BUSY))) {
+		if (ret == -EBUSY) {
 			mutex_unlock(&app_access_lock);
 			msleep(QSEECOM_SCM_EBUSY_WAIT_MS);
 			mutex_lock(&app_access_lock);
 		}
 		if (retry_count == 33)
 			pr_warn("secure world has been busy for 1 second!\n");
-	} while (((ret == -EBUSY) || (desc && (desc->ret[0] == -QSEE_RESULT_FAIL_APP_BUSY))) &&
+	} while (ret == -EBUSY &&
 			(retry_count++ < QSEECOM_SCM_EBUSY_MAX_RETRY));
 	return ret;
 }
@@ -1550,11 +1548,6 @@ static int qseecom_register_listener(struct qseecom_dev_handle *data,
 	struct qseecom_registered_listener_list *new_entry;
 	struct qseecom_registered_listener_list *ptr_svc;
 
-	if (data->listener.register_pending) {
-		pr_err("Already a listner registration is in process on this FD\n");
-		return -EINVAL;
-	}
-
 	ret = copy_from_user(&rcvd_lstnr, argp, sizeof(rcvd_lstnr));
 	if (ret) {
 		pr_err("copy_from_user failed\n");
@@ -1563,13 +1556,6 @@ static int qseecom_register_listener(struct qseecom_dev_handle *data,
 	if (!access_ok((void __user *)rcvd_lstnr.virt_sb_base,
 			rcvd_lstnr.sb_size))
 		return -EFAULT;
-
-	ptr_svc = __qseecom_find_svc(data->listener.id);
-	if (ptr_svc) {
-		pr_err("Already a listener registered on this data: lid=%d\n",
-			data->listener.id);
-		return -EINVAL;
-	}
 
 	ptr_svc = __qseecom_find_svc(rcvd_lstnr.listener_id);
 	if (ptr_svc) {
@@ -1614,16 +1600,13 @@ static int qseecom_register_listener(struct qseecom_dev_handle *data,
 	new_entry->svc.listener_id = rcvd_lstnr.listener_id;
 	new_entry->sb_length = rcvd_lstnr.sb_size;
 	new_entry->user_virt_sb_base = rcvd_lstnr.virt_sb_base;
-	data->listener.register_pending = true;
 	if (__qseecom_set_sb_memory(new_entry, data, &rcvd_lstnr)) {
 		pr_err("qseecom_set_sb_memory failed for listener %d, size %d\n",
 				rcvd_lstnr.listener_id, rcvd_lstnr.sb_size);
 		__qseecom_free_tzbuf(&new_entry->sglistinfo_shm);
 		kzfree(new_entry);
-		data->listener.register_pending = false;
 		return -ENOMEM;
 	}
-	data->listener.register_pending = false;
 
 	init_waitqueue_head(&new_entry->rcv_req_wq);
 	init_waitqueue_head(&new_entry->listener_block_app_wq);
@@ -2674,6 +2657,11 @@ err_resp:
 			pr_warn("get cback req app_id = %d, resp->data = %d\n",
 				data->client.app_id, resp->data);
 			resp->resp_type = SMCINVOKE_RESULT_INBOUND_REQ_NEEDED;
+			/* We are here because scm call sent to TZ has requested
+			 * for another callback request. This call has been a
+			 * success and hence setting result = 0
+			 */
+			resp->result = 0;
 			break;
 		default:
 			pr_err("fail:resp res= %d,app_id = %d,lstr = %d\n",
@@ -5413,8 +5401,8 @@ int qseecom_process_listener_from_smcinvoke(uint32_t *result,
 	if (ret)
 		pr_err("Failed on cmd %d for lsnr %d session %d, ret = %d\n",
 			resp.result, resp.data, resp.resp_type, ret);
-	*result = resp.resp_type;
-	*response_type = resp.result;
+	*result = resp.result;
+	*response_type = resp.resp_type;
 	*data = resp.data;
 	return ret;
 }

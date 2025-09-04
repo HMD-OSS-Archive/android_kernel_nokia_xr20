@@ -17,7 +17,6 @@
 enum qcom_download_mode {
 	QCOM_DOWNLOAD_NODUMP	= 0x00,
 	QCOM_DOWNLOAD_EDL	= 0x01,
-	QCOM_EDLOAD_PCI_MODE = 0X04,
 	QCOM_DOWNLOAD_FULLDUMP	= 0x10,
 	QCOM_DOWNLOAD_MINIDUMP	= 0x20,
 };
@@ -87,9 +86,6 @@ extern void qcom_scm_cpu_power_down(u32 flags);
 extern void qcom_scm_cpu_hp(u32 flags);
 extern int qcom_scm_sec_wdog_deactivate(void);
 extern int qcom_scm_sec_wdog_trigger(void);
-#ifdef CONFIG_TLB_CONF_HANDLER
-extern int qcom_scm_tlb_conf_handler(unsigned long addr);
-#endif
 extern void qcom_scm_disable_sdi(void);
 extern int qcom_scm_set_remote_state(u32 state, u32 id);
 extern int qcom_scm_spin_cpu(void);
@@ -130,10 +126,6 @@ extern int qcom_scm_iommu_secure_map(phys_addr_t sg_list_addr, size_t num_sg,
 				unsigned long iova, size_t total_len);
 extern int qcom_scm_iommu_secure_unmap(u64 sec_id, int cbndx,
 				unsigned long iova, size_t total_len);
-extern int qcom_scm_paravirt_smmu_attach(u64 sid, u64 asid, u64 ste_pa,
-				u64 ste_size, u64 cd_pa, u64 cd_size);
-extern int qcom_scm_paravirt_tlb_inv(u64 asid);
-extern int qcom_scm_paravirt_smmu_detach(u64 sid);
 extern int
 qcom_scm_assign_mem_regions(struct qcom_scm_mem_map_info *mem_regions,
 			    size_t mem_regions_sz, u32 *srcvms, size_t src_sz,
@@ -213,8 +205,6 @@ extern int qcom_scm_invoke_callback_response(phys_addr_t out_buf,
 		unsigned int *data);
 extern bool qcom_scm_is_available(void);
 extern int qcom_scm_mem_protect_audio(phys_addr_t paddr, size_t size);
-extern int qcom_scm_ddrbw_profiler(phys_addr_t in_buf, size_t in_buf_size,
-		phys_addr_t out_buf, size_t out_buf_size);
 #else
 
 #include <linux/errno.h>
@@ -235,9 +225,6 @@ static inline void qcom_scm_cpu_power_down(u32 flags) {}
 static inline void qcom_scm_cpu_hp(u32 flags) {}
 static inline int qcom_scm_sec_wdog_deactivate(void) { return -ENODEV; }
 static inline int qcom_scm_sec_wdog_trigger(void) { return -ENODEV; }
-#ifdef CONFIG_TLB_CONF_HANDLER
-static inline int qcom_scm_tlb_conf_handler(unsigned long addr) { return -ENODEV; }
-#endif
 static inline void qcom_scm_disable_sdi(void) {}
 static inline u32 qcom_scm_set_remote_state(u32 state, u32 id)
 		{ return -ENODEV; }
@@ -294,13 +281,6 @@ static inline int qcom_scm_iommu_secure_map(phys_addr_t sg_list_addr,
 		unsigned long iova, size_t total_len) { return -ENODEV; }
 static inline int qcom_scm_iommu_secure_unmap(u64 sec_id, int cbndx,
 		unsigned long iova, size_t total_len) { return -ENODEV; }
-static inline int qcom_scm_paravirt_smmu_attach(u64 sid, u64 asid, u64 ste_pa,
-					u64 ste_size, u64 cd_pa, u64 cd_size)
-		  { return -ENODEV; }
-static inline int qcom_scm_paravirt_tlb_inv(u64 asid)
-		  { return -ENODEV; }
-static inline int qcom_scm_paravirt_smmu_detach(u64 sid)
-		  { return -ENODEV; }
 static inline int
 qcom_scm_assign_mem_regions(struct qcom_scm_mem_map_info *mem_regions,
 			    size_t mem_regions_sz, u32 *srcvms, size_t src_sz,
@@ -410,8 +390,5 @@ static inline int qcom_scm_invoke_callback_response(phys_addr_t out_buf,
 static inline bool qcom_scm_is_available(void) { return false; }
 static inline int qcom_scm_mem_protect_audio(phys_addr_t paddr, size_t size)
 				{ return -ENODEV; }
-static inline int qcom_scm_ddrbw_profiler(phys_addr_t in_buf, size_t in_buf_size,
-		phys_addr_t out_buf, size_t out_buf_size)
-		{ return -ENODEV; }
 #endif
 #endif

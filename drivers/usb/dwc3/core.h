@@ -138,7 +138,6 @@
 #define DWC3_GEVNTCOUNT(n)	(0xc40c + ((n) * 0x10))
 
 #define DWC3_GHWPARAMS8		0xc600
-#define DWC3_GUCTL3		0xc60c
 #define DWC3_GFLADJ		0xc630
 
 /* Device Registers */
@@ -267,6 +266,9 @@
 #define DWC3_GCTL_GBLHIBERNATIONEN	BIT(1)
 #define DWC3_GCTL_DSBLCLKGTNG		BIT(0)
 
+/* Global User Control Register */
+#define DWC3_GUCTL_HSTINAUTORETRY	BIT(14)
+
 /* Global User Control 1 Register */
 #define DWC3_GUCTL1_PARKMODE_DISABLE_SS	BIT(17)
 #define DWC3_GUCTL1_TX_IPGAP_LINECHECK_DIS	BIT(28)
@@ -311,7 +313,6 @@
 
 /* Global USB2 PHY Vendor Control Register */
 #define DWC3_GUSB2PHYACC_NEWREGREQ	BIT(25)
-#define DWC3_GUSB2PHYACC_DONE		BIT(24)
 #define DWC3_GUSB2PHYACC_BUSY		BIT(23)
 #define DWC3_GUSB2PHYACC_WRITE		BIT(22)
 #define DWC3_GUSB2PHYACC_ADDR(n)	(n << 16)
@@ -408,10 +409,6 @@
 
 /* Global User Control Register 2 */
 #define DWC3_GUCTL2_RST_ACTBITLATER		BIT(14)
-
-/* Global User Control Register 3 */
-#define DWC3_GUCTL3_USB20_RETRY_DISABLE		BIT(16)
-#define DWC3_GUCTL3_SPLITDISABLE		BIT(14)
 
 /* Device Configuration Register */
 #define DWC3_DCFG_DEVADDR(addr)	((addr) << 3)
@@ -776,7 +773,6 @@ struct dwc3_ep {
 #define DWC3_EP_END_TRANSFER_PENDING BIT(4)
 #define DWC3_EP_PENDING_REQUEST	BIT(5)
 #define DWC3_EP_DELAY_START	BIT(6)
-#define DWC3_EP_PENDING_CLEAR_STALL	BIT(11)
 
 	/* This last one is specific to EP0 */
 #define DWC3_EP0_DIR_IN		BIT(31)
@@ -1079,6 +1075,7 @@ struct dwc3_scratchpad_array {
  * @link_state: link state
  * @speed: device speed (super, high, full, low)
  * @hwparams: copy of hwparams registers
+ * @root: debugfs root folder pointer
  * @regset: debugfs pointer to regdump file
  * @dbg_lsp_select: current debug lsp mux register selection
  * @test_mode: true when we're entering a USB test mode
@@ -1151,7 +1148,6 @@ struct dwc3_scratchpad_array {
  * @bh_handled_evt_cnt: no. of events handled per IRQ bottom-half
  * @irq_dbg_index: index for capturing IRQ stats
  * @vbus_draw: current to be drawn from USB
- * @dis_split_quirk: set to disable split boundary.
  * @imod_interval: set the interrupt moderation interval in 250ns
  *                 increments or 0 to disable.
  * @xhci_imod_value: imod value to use with xhci
@@ -1304,6 +1300,7 @@ struct dwc3 {
 	u8			num_eps;
 
 	struct dwc3_hwparams	hwparams;
+	struct dentry		*root;
 	struct debugfs_regset32	*regset;
 
 	u32			dbg_lsp_select;
@@ -1316,7 +1313,6 @@ struct dwc3 {
 	u8			rx_max_burst_prd;
 	u8			tx_thr_num_pkt_prd;
 	u8			tx_max_burst_prd;
-	u8			clear_stall_protocol;
 
 	const char		*hsphy_interface;
 
@@ -1337,7 +1333,6 @@ struct dwc3 {
 	unsigned		dis_start_transfer_quirk:1;
 	unsigned		usb3_lpm_capable:1;
 	unsigned		usb2_lpm_disable:1;
-	unsigned		usb2_gadget_lpm_disable:1;
 
 	unsigned		disable_scramble_quirk:1;
 	unsigned		u2exit_lfps_quirk:1;
@@ -1370,8 +1365,6 @@ struct dwc3 {
 	unsigned		dis_metastability_quirk:1;
 	unsigned		ssp_u3_u0_quirk:1;
 
-	unsigned		dis_split_quirk:1;
-
 	u16			imod_interval;
 	u32			xhci_imod_value;
 
@@ -1389,7 +1382,7 @@ struct dwc3 {
 
 	/* IRQ timing statistics */
 	int			irq;
-	atomic_t		irq_cnt;
+	unsigned long		irq_cnt;
 	ktime_t			bh_start_time[MAX_INTR_STATS];
 	unsigned int		bh_completion_time[MAX_INTR_STATS];
 	unsigned int		bh_handled_evt_cnt[MAX_INTR_STATS];

@@ -1,8 +1,10 @@
 # SPDX-License-Identifier: GPL-2.0
 $(warning "Compile HMD_RAMDUMP_ENABLE $(HMD_RAMDUMP_ENABLE)")
+#add by hao.huang@hmdglobal.com for ramdump switch begin
 ifeq ($(HMD_RAMDUMP_ENABLE), true)
 subdir-ccflags-y += -DHMD_RAMDUMP_ENABLE
 endif
+#add by hao.huang@hmdglobal.com for ramdump switch end
 
 obj-$(CONFIG_POWER_RESET_AS3722) += as3722-poweroff.o
 obj-$(CONFIG_POWER_RESET_AT91_POWEROFF) += at91-poweroff.o

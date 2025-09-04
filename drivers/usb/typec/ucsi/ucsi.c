@@ -223,18 +223,14 @@ void ucsi_altmode_update_active(struct ucsi_connector *con)
 					    con->partner_altmode[i] == altmode);
 }
 
-static int ucsi_altmode_next_mode(struct typec_altmode **alt, u16 svid)
+static u8 ucsi_altmode_next_mode(struct typec_altmode **alt, u16 svid)
 {
 	u8 mode = 1;
 	int i;
 
-	for (i = 0; alt[i]; i++) {
-		if (i > MODE_DISCOVERY_MAX)
-			return -ERANGE;
-
+	for (i = 0; alt[i]; i++)
 		if (alt[i]->svid == svid)
 			mode++;
-	}
 
 	return mode;
 }
@@ -269,11 +265,8 @@ static int ucsi_register_altmode(struct ucsi_connector *con,
 			goto err;
 		}
 
-		ret = ucsi_altmode_next_mode(con->port_altmode, desc->svid);
-		if (ret < 0)
-			return ret;
-
-		desc->mode = ret;
+		desc->mode = ucsi_altmode_next_mode(con->port_altmode,
+						    desc->svid);
 
 		switch (desc->svid) {
 		case USB_TYPEC_DP_SID:
@@ -299,11 +292,8 @@ static int ucsi_register_altmode(struct ucsi_connector *con,
 			goto err;
 		}
 
-		ret = ucsi_altmode_next_mode(con->partner_altmode, desc->svid);
-		if (ret < 0)
-			return ret;
-
-		desc->mode = ret;
+		desc->mode = ucsi_altmode_next_mode(con->partner_altmode,
+						    desc->svid);
 
 		alt = typec_partner_register_altmode(con->partner, desc);
 		if (IS_ERR(alt)) {
@@ -731,8 +721,6 @@ static int ucsi_dr_swap(struct typec_port *port, enum typec_data_role role)
 	     role == TYPEC_HOST))
 		goto out_unlock;
 
-	reinit_completion(&con->complete);
-
 	command = UCSI_SET_UOR | UCSI_CONNECTOR_NUMBER(con->num);
 	command |= UCSI_SET_UOR_ROLE(role);
 	command |= UCSI_SET_UOR_ACCEPT_ROLE_SWAPS;
@@ -740,18 +728,14 @@ static int ucsi_dr_swap(struct typec_port *port, enum typec_data_role role)
 	if (ret < 0)
 		goto out_unlock;
 
-	mutex_unlock(&con->lock);
-
 	if (!wait_for_completion_timeout(&con->complete,
-					 msecs_to_jiffies(UCSI_SWAP_TIMEOUT_MS)))
-		return -ETIMEDOUT;
-
-	return 0;
+					msecs_to_jiffies(UCSI_SWAP_TIMEOUT_MS)))
+		ret = -ETIMEDOUT;
 
 out_unlock:
 	mutex_unlock(&con->lock);
 
-	return ret;
+	return ret < 0 ? ret : 0;
 }
 
 static int ucsi_pr_swap(struct typec_port *port, enum typec_role role)
@@ -773,8 +757,6 @@ static int ucsi_pr_swap(struct typec_port *port, enum typec_role role)
 	if (cur_role == role)
 		goto out_unlock;
 
-	reinit_completion(&con->complete);
-
 	command = UCSI_SET_PDR | UCSI_CONNECTOR_NUMBER(con->num);
 	command |= UCSI_SET_PDR_ROLE(role);
 	command |= UCSI_SET_PDR_ACCEPT_ROLE_SWAPS;
@@ -782,13 +764,11 @@ static int ucsi_pr_swap(struct typec_port *port, enum typec_role role)
 	if (ret < 0)
 		goto out_unlock;
 
-	mutex_unlock(&con->lock);
-
 	if (!wait_for_completion_timeout(&con->complete,
-					 msecs_to_jiffies(UCSI_SWAP_TIMEOUT_MS)))
-		return -ETIMEDOUT;
-
-	mutex_lock(&con->lock);
+				msecs_to_jiffies(UCSI_SWAP_TIMEOUT_MS))) {
+		ret = -ETIMEDOUT;
+		goto out_unlock;
+	}
 
 	/* Something has gone wrong while swapping the role */
 	if (UCSI_CONSTAT_PWR_OPMODE(con->status.flags) !=
@@ -1018,7 +998,6 @@ err_unregister:
 	}
 
 err_reset:
-	memset(&ucsi->cap, 0, sizeof(ucsi->cap));
 	ucsi_reset_ppm(ucsi);
 err:
 	mutex_unlock(&ucsi->ppm_lock);

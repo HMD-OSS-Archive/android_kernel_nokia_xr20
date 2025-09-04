@@ -268,19 +268,13 @@ struct kgsl_device {
 	} snapshot_memory;
 
 	struct kgsl_snapshot *snapshot;
-	/** @panic_nb: notifier block to capture GPU snapshot on kernel panic */
-	struct notifier_block panic_nb;
-	struct {
-		void *ptr;
-		u32 size;
-	} snapshot_memory_atomic;
 
 	u32 snapshot_faultcount;	/* Total number of faults since boot */
 	bool force_panic;		/* Force panic after snapshot dump */
 	bool skip_ib_capture;		/* Skip IB capture after snapshot */
 	bool prioritize_unrecoverable;	/* Overwrite with new GMU snapshots */
 	bool set_isdb_breakpoint;	/* Set isdb registers before snapshot */
-	bool snapshot_atomic;		/* To capture snapshot in atomic context*/
+
 	/* Use CP Crash dumper to get GPU snapshot*/
 	bool snapshot_crashdumper;
 	/* Use HOST side register reads to get GPU snapshot*/
@@ -320,10 +314,8 @@ struct kgsl_device {
 	u32 speed_bin;
 	/** @gmu_fault: Set when a gmu or rgmu fault is encountered */
 	bool gmu_fault;
-	/** @timelines: Iterator for assigning IDs to timelines */
-	struct idr timelines;
-	/** @timelines_lock: Spinlock to protect the timelines idr */
-	spinlock_t timelines_lock;
+	/** @timelines: xarray for the timelines */
+	struct xarray timelines;
 };
 
 #define KGSL_MMU_DEVICE(_mmu) \
@@ -437,7 +429,6 @@ struct kgsl_context {
  * @fd_count: Counter for the number of FDs for this process
  * @ctxt_count: Count for the number of contexts for this process
  * @ctxt_count_lock: Spinlock to protect ctxt_count
- * @frame_count: Count for the number of frames processed
  */
 struct kgsl_process_private {
 	unsigned long priv;
@@ -449,7 +440,6 @@ struct kgsl_process_private {
 	struct kgsl_pagetable *pagetable;
 	struct list_head list;
 	struct kobject kobj;
-	struct kobject kobj_memtype;
 	struct dentry *debug_root;
 	struct {
 		atomic64_t cur;
@@ -461,7 +451,6 @@ struct kgsl_process_private {
 	int fd_count;
 	atomic_t ctxt_count;
 	spinlock_t ctxt_count_lock;
-	atomic64_t frame_count;
 };
 
 /**

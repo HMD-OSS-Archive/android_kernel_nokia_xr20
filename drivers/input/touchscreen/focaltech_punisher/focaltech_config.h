@@ -220,7 +220,8 @@
  * Pinctrl enable
  * default: disable
  */
-#define FTS_PINCTRL_EN                          1
+//modfiy by shuaijun.zhang at 2021/0310 for the gesture of poweroff the screen 
+#define FTS_PINCTRL_EN                          0
 
 /*
  * Customer power enable

@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018 - 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _IPA_FMWK_H_
@@ -123,23 +122,6 @@ struct ipa_core_data {
 	int (*ipa_disconnect_wdi_pipe)(u32 clnt_hdl);
 	int (*ipa_uc_reg_rdyCB)(struct ipa_wdi_uc_ready_params *param);
 	int (*ipa_uc_dereg_rdyCB)(void);
-
-	int (*ipa_rmnet_ll_xmit)(struct sk_buff *skb);
-
-	int (*ipa_register_rmnet_ll_cb)(
-		void (*ipa_rmnet_ll_ready_cb)(void *user_data1),
-		void *user_data1,
-		void (*ipa_rmnet_ll_stop_cb)(void *user_data2),
-		void *user_data2,
-		void (*ipa_rmnet_ll_rx_notify_cb)(
-			void *user_data3, void *rx_data),
-		void *user_data3);
-
-	int (*ipa_unregister_rmnet_ll_cb)(void);
-	int (*ipa_register_notifier)(void *fn_ptr);
-	int (*ipa_unregister_notifier)(void *fn_ptr);
-	int (*ipa_add_socksv5_conn)(struct ipa_socksv5_info *info);
-	int (*ipa_del_socksv5_conn)(uint32_t handle);
 };
 
 struct ipa_usb_data {
@@ -167,8 +149,6 @@ struct ipa_usb_data {
 
 	int (*ipa_usb_xdci_resume)(u32 ul_clnt_hdl, u32 dl_clnt_hdl,
 		enum ipa_usb_teth_prot teth_prot);
-
-	bool (*ipa_usb_is_teth_prot_connected)(enum ipa_usb_teth_prot usb_teth_prot);
 };
 
 struct ipa_wdi3_data {
@@ -206,37 +186,6 @@ struct ipa_wdi3_data {
 	int (*ipa_wdi_sw_stats)(struct ipa_wdi_tx_info *info);
 
 	int (*ipa_get_wdi_version)(void);
-
-	bool (*ipa_wdi_is_tx1_used)(void);
-
-	int (*ipa_wdi_get_capabilities)(struct ipa_wdi_capabilities_out_params *out);
-
-	int (*ipa_wdi_init_per_inst)(struct ipa_wdi_init_in_params *in,
-		struct ipa_wdi_init_out_params *out);
-
-	int (*ipa_wdi_cleanup_per_inst)(u32 hdl);
-
-	int (*ipa_wdi_reg_intf_per_inst)(
-		struct ipa_wdi_reg_intf_in_params *in);
-
-	int (*ipa_wdi_dereg_intf_per_inst)(const char *netdev_name, u32 hdl);
-
-	int (*ipa_wdi_conn_pipes_per_inst)(struct ipa_wdi_conn_in_params *in,
-		struct ipa_wdi_conn_out_params *out);
-
-	int (*ipa_wdi_disconn_pipes_per_inst)(u32 hdl);
-
-	int (*ipa_wdi_enable_pipes_per_inst)(u32 hdl);
-
-	int (*ipa_wdi_disable_pipes_per_inst)(u32 hdl);
-
-	int (*ipa_wdi_set_perf_profile_per_inst)(u32 hdl, struct ipa_wdi_perf_profile *profile);
-
-	int (*ipa_wdi_create_smmu_mapping_per_inst)(u32 hdl, u32 num_buffers,
-		struct ipa_wdi_buffer_info *info);
-
-	int (*ipa_wdi_release_smmu_mapping_per_inst)(u32 hdl, u32 num_buffers,
-		struct ipa_wdi_buffer_info *info);
 };
 
 struct ipa_qdss_data {
@@ -362,12 +311,9 @@ struct ipa_eth_data {
 	int (*ipa_eth_client_set_perf_profile)(struct ipa_eth_client *client,
 		struct ipa_eth_perf_profile *profile);
 
-	enum ipa_client_type (*ipa_eth_get_ipa_client_type_from_eth_type)(
-		enum ipa_eth_client_type eth_client_type,
-		enum ipa_eth_pipe_direction dir);
+	int (*ipa_eth_client_conn_evt)(struct ipa_ecm_msg *msg);
 
-	bool (*ipa_eth_client_exist)(
-		enum ipa_eth_client_type eth_client_type, int inst_id);
+	int (*ipa_eth_client_disconn_evt)(struct ipa_ecm_msg *msg);
 };
 
 #if IS_ENABLED(CONFIG_IPA3)

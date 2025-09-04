@@ -505,9 +505,6 @@ struct smb_charger {
 #ifdef CONFIG_TOUCHSCREEN_USB_CHECK
 	struct work_struct ctp_work;
 #endif /* CONFIG_TOUCHSCREEN_USB_CHECK */
-#ifdef CONFIG_HS_CHARGE_FG_FUNCTION
-	struct delayed_work	initial_recheck_otg_work;
-#endif /*CONFIG_HS_CHARGE_FG_FUNCTION*/
 	struct alarm		lpd_recheck_timer;
 	struct alarm		moisture_protection_alarm;
 	struct alarm		chg_termination_alarm;
@@ -549,9 +546,6 @@ struct smb_charger {
 	bool			sw_jeita_enabled;
 	bool			jeita_arb_enable;
 	bool			typec_legacy_use_rp_icl;
-#ifdef CONFIG_HS_TYPEC_OTG_CONTROL_FUNCTION
-	bool			disable_otg;
-#endif /* CONFIG_HS_TYPEC_OTG_CONTROL_FUNCTION */
 	bool			is_hdc;
 	bool			chg_done;
 	int			connector_type;
@@ -628,8 +622,6 @@ struct smb_charger {
 	bool			dpdm_enabled;
 	bool			apsd_ext_timeout;
 	bool			qc3p5_detected;
-	int			qc3p5_detected_mw;
-	bool			disable_suspend_on_collapse;
 
 	/* workaround flag */
 	int		real_charger_type;
@@ -881,5 +873,4 @@ int smblib_get_prop_voltage_wls_output(struct smb_charger *chg,
 int smblib_get_prop_dc_voltage_now(struct smb_charger *chg,
 				union power_supply_propval *val);
 
-void smblib_moisture_detection_enable(struct smb_charger *chg, int pval);
 #endif /* __SMB5_CHARGER_H */

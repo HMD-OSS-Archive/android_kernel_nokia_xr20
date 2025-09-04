@@ -47,6 +47,7 @@ extern int get_camera_info(char *buf, void *arg0);
 
 extern int get_mmc_chip_info(char *buf, void *arg0);
 
+//For MTK secureboot.add by yinglong.tang
 extern int get_mtk_secboot_info(void) ;
 extern int get_mtk_secboot_cb(char *buf, void *args);
 #endif

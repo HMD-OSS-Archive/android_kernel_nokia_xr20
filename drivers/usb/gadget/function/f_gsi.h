@@ -44,9 +44,8 @@
 #define GSI_OUT_AGGR_SIZE 24576
 
 #define GSI_IN_RNDIS_AGGR_SIZE 16384
-#define GSI_IN_MBIM_AGGR_SIZE 31744
+#define GSI_IN_MBIM_AGGR_SIZE 16384
 #define GSI_IN_RMNET_AGGR_SIZE 16384
-#define GSI_OUT_MBIM_AGGR_SIZE 16384
 #define GSI_ECM_AGGR_SIZE 2048
 
 #ifdef CONFIG_USB_LOW_MEM_VARIANT
@@ -88,9 +87,6 @@
 #define GSI_MBIM_DATA_EP_TYPE_HSUSB 0x2
 /* ID for Microsoft OS String */
 #define GSI_MBIM_OS_STRING_ID 0xEE
-
-static char compatible_id[256] = "ALTRCFG";
-static char sub_compatible_id[8];
 
 #define EVT_NONE			0
 #define EVT_UNINITIALIZED		1
@@ -313,7 +309,6 @@ struct f_gsi {
 	struct gsi_ctrl_port c_port;
 	void *ipc_log_ctxt;
 	bool rmnet_dtr_status;
-	bool rmnet_use_tcm_mem;
 
 	bool rwake_inprogress;
 
@@ -797,8 +792,7 @@ static struct usb_gadget_strings *rndis_gsi_strings[] = {
 };
 
 /* mbim device descriptors */
-#define MBIM_NTB_DEFAULT_IN_SIZE	GSI_IN_MBIM_AGGR_SIZE
-#define MBIM_NTB_DEFAULT_OUT_SIZE	GSI_OUT_MBIM_AGGR_SIZE
+#define MBIM_NTB_DEFAULT_IN_SIZE	(0x4000)
 
 static struct usb_cdc_ncm_ntb_parameters mbim_gsi_ntb_parameters = {
 	.wLength = cpu_to_le16(sizeof(mbim_gsi_ntb_parameters)),
@@ -808,7 +802,7 @@ static struct usb_cdc_ncm_ntb_parameters mbim_gsi_ntb_parameters = {
 	.wNdpInPayloadRemainder = cpu_to_le16(0),
 	.wNdpInAlignment = cpu_to_le16(4),
 
-	.dwNtbOutMaxSize = cpu_to_le32(MBIM_NTB_DEFAULT_OUT_SIZE),
+	.dwNtbOutMaxSize = cpu_to_le32(0x4000),
 	.wNdpOutDivisor = cpu_to_le16(4),
 	.wNdpOutPayloadRemainder = cpu_to_le16(0),
 	.wNdpOutAlignment = cpu_to_le16(4),

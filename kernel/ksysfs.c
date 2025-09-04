@@ -187,6 +187,7 @@ static ssize_t rcu_normal_store(struct kobject *kobj,
 KERNEL_ATTR_RW(rcu_normal);
 #endif /* #ifndef CONFIG_TINY_RCU */
 
+//add by changxue.fang for restart modem,20210118,start
 #ifdef CONFIG_SUPPORT_RESTART_MODEM
 static ssize_t restart_modem_show(struct kobject *kobj,
 				       struct kobj_attribute *attr, char *buf)
@@ -211,6 +212,7 @@ static ssize_t restart_modem_store(struct kobject *kobj,
 }
 KERNEL_ATTR_RW(restart_modem);
 #endif
+//add by changxue.fang for restart modem,20210118,end
 
 #ifdef TARGET_PRODUCT_PUNISHER
 int wallpaper_ID;
@@ -288,6 +290,7 @@ static struct bin_attribute notes_attr __ro_after_init  = {
 struct kobject *kernel_kobj;
 EXPORT_SYMBOL_GPL(kernel_kobj);
 
+//add by changxue.fang for restart modem,add &restart_modem_attr.attr,20210118
 static struct attribute * kernel_attrs[] = {
 	&fscaps_attr.attr,
 	#ifdef CONFIG_SUPPORT_RESTART_MODEM

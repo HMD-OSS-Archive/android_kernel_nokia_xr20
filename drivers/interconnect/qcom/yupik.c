@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
  *
  */
 
@@ -848,27 +847,6 @@ static struct qcom_icc_node qxm_nsp = {
 	.noc_ops = &qcom_qnoc4_ops,
 	.num_links = 1,
 	.links = { SLAVE_CDSP_MEM_NOC },
-};
-
-static struct qcom_icc_qosbox qhm_gic_qos = {
-	.regs = icc_qnoc_qos_regs[ICC_QNOC_QOSGEN_TYPE_RPMH],
-	.num_ports = 1,
-	.offsets = { 0x9000 },
-	.config = &(struct qos_config) {
-		.prio = 2,
-		.urg_fwd = 0,
-	},
-};
-
-static struct qcom_icc_node qhm_gic = {
-	.name = "qhm_gic",
-	.id = MASTER_GIC_1,
-	.channels = 1,
-	.buswidth = 4,
-	.noc_ops = &qcom_qnoc4_ops,
-	.qosbox = &qhm_gic_qos,
-	.num_links = 1,
-	.links = { SLAVE_SNOC_GEM_NOC_SF },
 };
 
 static struct qcom_icc_node qnm_aggre1_noc = {
@@ -2459,7 +2437,6 @@ static struct qcom_icc_bcm *system_noc_bcms[] = {
 };
 
 static struct qcom_icc_node *system_noc_nodes[] = {
-	[MASTER_GIC_1] = &qhm_gic,
 	[MASTER_A1NOC_SNOC] = &qnm_aggre1_noc,
 	[MASTER_A2NOC_SNOC] = &qnm_aggre2_noc,
 	[MASTER_SNOC_CFG] = &qnm_snoc_cfg,
@@ -2731,6 +2708,12 @@ static int __init qnoc_driver_init(void)
 	return platform_driver_register(&qnoc_driver);
 }
 core_initcall(qnoc_driver_init);
+
+static void __exit qnoc_driver_exit(void)
+{
+	platform_driver_unregister(&qnoc_driver);
+}
+module_exit(qnoc_driver_exit);
 
 MODULE_DESCRIPTION("Yupik NoC driver");
 MODULE_LICENSE("GPL v2");

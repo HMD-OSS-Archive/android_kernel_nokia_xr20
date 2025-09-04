@@ -160,6 +160,7 @@ static int dev_info_probe(struct platform_device *pdev) {
         }
     }
 
+    //For MTK secureboot.add by yinglong.tang
     /** get_mtk_secboot_info(); */
     //FULL_PRODUCT_DEVICE_CB(ID_SECBOOT, get_mtk_secboot_cb, pdev);
     return 0;

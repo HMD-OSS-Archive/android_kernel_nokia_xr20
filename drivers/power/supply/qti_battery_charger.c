@@ -20,7 +20,6 @@
 #include <linux/power_supply.h>
 #include <linux/soc/qcom/pmic_glink.h>
 #include <linux/soc/qcom/battery_charger.h>
-#include "qti_typec_class.h"
 
 #define MSG_OWNER_BC			32778
 #define MSG_TYPE_REQ_RESP		1
@@ -224,7 +223,6 @@ struct battery_chg_dev {
 	struct device			*dev;
 	struct class			battery_class;
 	struct pmic_glink_client	*client;
-	struct typec_role_class		*typec_class;
 	struct mutex			rw_lock;
 	struct completion		ack;
 	struct completion		fw_buf_ack;
@@ -396,9 +394,8 @@ static int write_property_id(struct battery_chg_dev *bcdev,
 	req_msg.hdr.type = MSG_TYPE_REQ_RESP;
 	req_msg.hdr.opcode = pst->opcode_set;
 
-	if (pst->psy)
-		pr_debug("psy: %s prop_id: %u val: %u\n", pst->psy->desc->name,
-			req_msg.property_id, val);
+	pr_debug("psy: %s prop_id: %u val: %u\n", pst->psy->desc->name,
+		req_msg.property_id, val);
 
 	return battery_chg_write(bcdev, &req_msg, sizeof(req_msg));
 }
@@ -415,9 +412,8 @@ static int read_property_id(struct battery_chg_dev *bcdev,
 	req_msg.hdr.type = MSG_TYPE_REQ_RESP;
 	req_msg.hdr.opcode = pst->opcode_get;
 
-	if (pst->psy)
-		pr_debug("psy: %s prop_id: %u\n", pst->psy->desc->name,
-			req_msg.property_id);
+	pr_debug("psy: %s prop_id: %u\n", pst->psy->desc->name,
+		req_msg.property_id);
 
 	return battery_chg_write(bcdev, &req_msg, sizeof(req_msg));
 }
@@ -431,9 +427,8 @@ static int get_property_id(struct psy_state *pst,
 		if (pst->map[i] == prop)
 			return i;
 
-	if (pst->psy)
-		pr_err("No property id for property %d in psy %s\n", prop,
-			pst->psy->desc->name);
+	pr_err("No property id for property %d in psy %s\n", prop,
+		pst->psy->desc->name);
 
 	return -ENOENT;
 }
@@ -671,21 +666,12 @@ static void battery_chg_update_uusb_type(struct battery_chg_dev *bcdev,
 			/* Device mode connect notification */
 			extcon_set_state_sync(bcdev->extcon, EXTCON_USB, 1);
 			bcdev->usb_prev_mode = EXTCON_USB;
-			rc = qti_typec_partner_register(bcdev->typec_class,
-							TYPEC_DEVICE);
-			if (rc < 0)
-				pr_err("Failed to register typec partner rc=%d\n",
-					rc);
 		}
 		break;
 	case POWER_SUPPLY_SCOPE_SYSTEM:
 		/* Host mode connect notification */
 		extcon_set_state_sync(bcdev->extcon, EXTCON_USB_HOST, 1);
 		bcdev->usb_prev_mode = EXTCON_USB_HOST;
-		rc = qti_typec_partner_register(bcdev->typec_class, TYPEC_HOST);
-		if (rc < 0)
-			pr_err("Failed to register typec partner rc=%d\n",
-				rc);
 		break;
 	default:
 		if (bcdev->usb_prev_mode == EXTCON_USB ||
@@ -694,7 +680,6 @@ static void battery_chg_update_uusb_type(struct battery_chg_dev *bcdev,
 			extcon_set_state_sync(bcdev->extcon,
 					      bcdev->usb_prev_mode, 0);
 			bcdev->usb_prev_mode = EXTCON_NONE;
-			qti_typec_partner_unregister(bcdev->typec_class);
 		}
 		break;
 	}
@@ -1951,7 +1936,10 @@ static int register_extcon_conn_type(struct battery_chg_dev *bcdev)
 		return rc;
 	}
 
-	bcdev->connector_type = pst->prop[USB_CONNECTOR_TYPE];
+	if (pst->prop[USB_CONNECTOR_TYPE] != USB_CONNECTOR_TYPE_MICRO_USB)
+		return 0;
+
+	bcdev->connector_type = USB_CONNECTOR_TYPE_MICRO_USB;
 	bcdev->usb_prev_mode = EXTCON_NONE;
 
 	bcdev->extcon = devm_extcon_dev_allocate(bcdev->dev,
@@ -1973,9 +1961,6 @@ static int register_extcon_conn_type(struct battery_chg_dev *bcdev)
 					     EXTCON_USB_HOST, EXTCON_PROP_USB_SS);
 	if (rc < 0)
 		pr_err("failed to configure extcon capabilities rc=%d\n", rc);
-	else
-		pr_debug("Registered extcon, connector_type %s\n",
-			 bcdev->connector_type ? "uusb" : "Typec");
 
 	return rc;
 }
@@ -2074,15 +2059,6 @@ static int battery_chg_probe(struct platform_device *pdev)
 	if (rc < 0)
 		dev_warn(dev, "Failed to register extcon rc=%d\n", rc);
 
-	if (bcdev->connector_type == USB_CONNECTOR_TYPE_MICRO_USB) {
-		bcdev->typec_class = qti_typec_class_init(bcdev->dev);
-		if (IS_ERR_OR_NULL(bcdev->typec_class)) {
-			dev_err(dev, "Failed to init typec class err=%d\n",
-				PTR_ERR(bcdev->typec_class));
-			return PTR_ERR(bcdev->typec_class);
-		}
-	}
-
 	schedule_work(&bcdev->usb_type_work);
 
 	return 0;
@@ -2103,7 +2079,6 @@ static int battery_chg_remove(struct platform_device *pdev)
 	debugfs_remove_recursive(bcdev->debugfs_dir);
 	class_unregister(&bcdev->battery_class);
 	unregister_reboot_notifier(&bcdev->reboot_notifier);
-	qti_typec_class_deinit(bcdev->typec_class);
 	rc = pmic_glink_unregister_client(bcdev->client);
 	if (rc < 0) {
 		pr_err("Error unregistering from pmic_glink, rc=%d\n", rc);

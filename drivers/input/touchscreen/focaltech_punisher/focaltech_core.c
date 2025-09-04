@@ -51,7 +51,6 @@
 #define FTS_SUSPEND_LEVEL 1     /* Early-suspend level */
 #endif
 #include "focaltech_core.h"
-#include <linux/pm_runtime.h>
 
 char touch_version[32] = "tp not found";
 EXPORT_SYMBOL(touch_version);
@@ -79,6 +78,8 @@ struct fts_ts_data *fts_data;
 *****************************************************************************/
 static int fts_ts_suspend(struct device *dev);
 static int fts_ts_resume(struct device *dev);
+//add by shuaijun.zhang for adjust tp_reset time
+static int fts_power_source_suspend(struct fts_ts_data *ts_data);
 
 /*****************************************************************************
 *  Name: fts_wait_tp_to_valid
@@ -137,14 +138,16 @@ void fts_tp_state_recovery(struct fts_ts_data *ts_data)
 int fts_reset_proc(int hdelayms)
 {
     FTS_DEBUG("tp reset");
+	//add by shuaijun.zhang for adjust tp_reset time begin 
     //gpio_direction_output(fts_data->pdata->reset_gpio, 0);
     //mdelay(8);
-
+	
     gpio_direction_output(fts_data->pdata->reset_gpio, 1);
 
     //if (hdelayms) {
     //    msleep(hdelayms);
     //}
+	//add by shuaijun.zhang for adjust tp_reset time end 
 
     return 0;
 }
@@ -829,7 +832,7 @@ static int fts_report_buffer_init(struct fts_ts_data *ts_data)
     return 0;
 }
 
-//#if FTS_POWER_SOURCE_CUST_EN
+#if FTS_POWER_SOURCE_CUST_EN
 /*****************************************************************************
 * Power Control
 *****************************************************************************/
@@ -925,10 +928,6 @@ static int fts_pinctrl_select_release(struct fts_ts_data *ts)
 }
 #endif /* FTS_PINCTRL_EN */
 
-#if FTS_POWER_SOURCE_CUST_EN
-/*****************************************************************************
-* Power Control
-*****************************************************************************/
 static int fts_power_source_ctrl(struct fts_ts_data *ts_data, int enable)
 {
     int ret = 0;
@@ -942,7 +941,7 @@ static int fts_power_source_ctrl(struct fts_ts_data *ts_data, int enable)
     if (enable) {
         if (ts_data->power_disabled) {
             FTS_DEBUG("regulator enable !");
-
+			
             gpio_direction_output(ts_data->pdata->reset_gpio, 0);
             msleep(1);
             ret = regulator_enable(ts_data->vdd);
@@ -1268,7 +1267,6 @@ static void fts_resume_work(struct work_struct *work)
     struct fts_ts_data *ts_data = container_of(work, struct fts_ts_data,
                                   resume_work);
 
-    pm_runtime_enable(ts_data->dev);
     fts_ts_resume(ts_data->dev);
 }
 
@@ -1553,11 +1551,6 @@ static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
     }
 #endif
 
-#if FTS_PINCTRL_EN
-    fts_pinctrl_init(ts_data);
-    fts_pinctrl_select_normal(ts_data);
-#endif
-
 #if (!FTS_CHIP_IDC)
     fts_reset_proc(200);
 #endif
@@ -1733,9 +1726,6 @@ static int fts_ts_remove_entry(struct fts_ts_data *ts_data)
 #if FTS_POWER_SOURCE_CUST_EN
     fts_power_source_exit(ts_data);
 #endif
-#if FTS_PINCTRL_EN
-    fts_pinctrl_select_release(ts_data);
-#endif
 
     kfree_safe(ts_data->point_buf);
     kfree_safe(ts_data->events);
@@ -1769,11 +1759,9 @@ static int fts_ts_suspend(struct device *dev)
 #endif
 
     if (ts_data->gesture_mode) {
-#if FTS_PINCTRL_EN
-        fts_pinctrl_select_normal(ts_data);
-#endif
         fts_gesture_suspend(ts_data);
     } else {
+		//add by shuaijun.zhang for adjust TP reset time begin
         FTS_INFO("make TP enter into sleep mode ts_data->ic_info.is_incell =%d\n",ts_data->ic_info.is_incell);
         ret = fts_write_reg(FTS_REG_POWER_MODE, FTS_REG_POWER_MODE_SLEEP);
         if (ret < 0)
@@ -1786,17 +1774,18 @@ static int fts_ts_suspend(struct device *dev)
                 FTS_ERROR("power enter suspend fail");
             }
 #endif
-        }
-#if FTS_PINCTRL_EN
-        fts_pinctrl_select_suspend(ts_data);
-#endif
+        } else {
+			ret = fts_power_source_suspend(ts_data);
+            if (ret < 0) {
+                FTS_ERROR("power enter suspend fail");
+            }
+		}
     }
-
+	//add by shuaijun.zhang for adjust TP reset time end
+	
     fts_release_all_finger();
     ts_data->suspended = true;
     FTS_FUNC_EXIT();
-
-    pm_runtime_disable(dev);
     return 0;
 }
 
@@ -1817,11 +1806,7 @@ static int fts_ts_resume(struct device *dev)
         fts_power_source_resume(ts_data);
 #endif
         fts_reset_proc(0);
-    }
-#if FTS_PINCTRL_EN
-    fts_pinctrl_select_normal(ts_data);
-#endif
-
+    } 
     fts_wait_tp_to_valid();
     fts_ex_mode_recovery(ts_data);
 
@@ -1841,14 +1826,11 @@ static int fts_ts_resume(struct device *dev)
 #if defined(CONFIG_PM) && FTS_PATCH_COMERR_PM
 static int fts_pm_suspend(struct device *dev)
 {
-    struct fts_ts_data *ts_data;
+    struct fts_ts_data *ts_data = dev_get_drvdata(dev);
 
-    fts_irq_disable();
-    ts_data = dev_get_drvdata(dev);
     FTS_INFO("system enters into pm_suspend");
     ts_data->pm_suspend = true;
     reinit_completion(&ts_data->pm_completion);
-    fts_irq_enable();
     return 0;
 }
 
@@ -1875,7 +1857,7 @@ static int fts_ts_probe(struct spi_device *spi)
 {
     int ret = 0;
     struct fts_ts_data *ts_data = NULL;
-   #ifdef TARGET_PRODUCT_PUNISHER
+   #if defined(TARGET_PRODUCT_PUNISHER)
     FTS_INFO("[PUNISHER_EDIT success]Touch Screen(SPI BUS) driver prboe...");
    #else
     FTS_INFO("Touch Screen(SPI BUS) driver prboe...");

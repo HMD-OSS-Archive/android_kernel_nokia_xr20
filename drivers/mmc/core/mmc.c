@@ -95,7 +95,7 @@ static int mmc_decode_cid(struct mmc_card *card)
 	case 3: /* MMC v3.1 - v3.3 */
 	case 4: /* MMC v4 */
 		card->cid.manfid	= UNSTUFF_BITS(resp, 120, 8);
-		card->cid.oemid		= UNSTUFF_BITS(resp, 104, 8);
+		card->cid.oemid		= UNSTUFF_BITS(resp, 104, 16);
 		card->cid.prod_name[0]	= UNSTUFF_BITS(resp, 96, 8);
 		card->cid.prod_name[1]	= UNSTUFF_BITS(resp, 88, 8);
 		card->cid.prod_name[2]	= UNSTUFF_BITS(resp, 80, 8);
@@ -424,6 +424,10 @@ static int mmc_decode_ext_csd(struct mmc_card *card, u8 *ext_csd)
 
 		/* EXT_CSD value is in units of 10ms, but we store in ms */
 		card->ext_csd.part_time = 10 * ext_csd[EXT_CSD_PART_SWITCH_TIME];
+		/* Some eMMC set the value too low so set a minimum */
+		if (card->ext_csd.part_time &&
+		    card->ext_csd.part_time < MMC_MIN_PART_SWITCH_TIME)
+			card->ext_csd.part_time = MMC_MIN_PART_SWITCH_TIME;
 
 		/* Sleep / awake timeout in 100ns units */
 		if (sa_shift > 0 && sa_shift <= 0x17)
@@ -612,17 +616,6 @@ static int mmc_decode_ext_csd(struct mmc_card *card, u8 *ext_csd)
 	} else {
 		card->ext_csd.data_sector_size = 512;
 	}
-
-	/*
-	 * GENERIC_CMD6_TIME is to be used "unless a specific timeout is defined
-	 * when accessing a specific field", so use it here if there is no
-	 * PARTITION_SWITCH_TIME.
-	 */
-	if (!card->ext_csd.part_time)
-		card->ext_csd.part_time = card->ext_csd.generic_cmd6_time;
-	/* Some eMMC set the value too low so set a minimum */
-	if (card->ext_csd.part_time < MMC_MIN_PART_SWITCH_TIME)
-		card->ext_csd.part_time = MMC_MIN_PART_SWITCH_TIME;
 
 	/* eMMC v5 or later */
 	if (card->ext_csd.rev >= 7) {
@@ -2101,6 +2094,17 @@ static int mmc_can_sleep(struct mmc_card *card)
 	return (card && card->ext_csd.rev >= 3);
 }
 
+static int mmc_can_sleepawake(struct mmc_host *host)
+{
+#if defined(CONFIG_SDC_QTI)
+	return host && (host->caps2 & MMC_CAP2_SLEEP_AWAKE) && host->card &&
+		(host->card->ext_csd.rev >= 3);
+#else
+	return host && host->card && (host->card->ext_csd.rev >= 3);
+#endif
+
+}
+
 static int mmc_sleepawake(struct mmc_host *host, bool sleep)
 {
 	struct mmc_command cmd = {};
@@ -2325,7 +2329,7 @@ static int _mmc_suspend(struct mmc_host *host, bool is_suspend)
 	if (mmc_can_poweroff_notify(host->card) &&
 		((host->caps2 & MMC_CAP2_FULL_PWR_CYCLE) || !is_suspend))
 		err = mmc_poweroff_notify(host->card, notify_type);
-	if (mmc_can_sleep(host->card)) {
+	if (mmc_can_sleepawake(host)) {
 #if defined(CONFIG_SDC_QTI)
 		memcpy(&host->cached_ios, &host->ios, sizeof(host->cached_ios));
 #endif
@@ -2426,7 +2430,6 @@ static int _mmc_resume(struct mmc_host *host)
 #if defined(CONFIG_SDC_QTI)
 	if (!mmc_card_suspended(host->card)) {
 		mmc_release_host(host);
-		err = 0;
 #else
 	if (!mmc_card_suspended(host->card))
 #endif
@@ -2438,7 +2441,7 @@ static int _mmc_resume(struct mmc_host *host)
 	mmc_log_string(host, "Enter\n");
 	mmc_power_up(host, host->card->ocr);
 
-	if (mmc_can_sleep(host->card)) {
+	if (mmc_can_sleepawake(host)) {
 		err = mmc_sleepawake(host, false);
 		if (!err)
 			err = mmc_partial_init(host);

@@ -160,14 +160,6 @@ int qcom_scm_sec_wdog_trigger(void)
 }
 EXPORT_SYMBOL(qcom_scm_sec_wdog_trigger);
 
-#ifdef CONFIG_TLB_CONF_HANDLER
-int qcom_scm_tlb_conf_handler(unsigned long addr)
-{
-	return __qcom_scm_tlb_conf_handler(__scm->dev, addr);
-}
-EXPORT_SYMBOL(qcom_scm_tlb_conf_handler);
-#endif
-
 /**
  * qcom_scm_disable_sdi() - Disable SDI
  */
@@ -482,27 +474,6 @@ void qcom_scm_deassert_ps_hold(void)
 	__qcom_scm_deassert_ps_hold(dev);
 }
 EXPORT_SYMBOL(qcom_scm_deassert_ps_hold);
-
-int qcom_scm_paravirt_smmu_attach(u64 sid, u64 asid,
-			u64 ste_pa, u64 ste_size, u64 cd_pa,
-			u64 cd_size)
-{
-	return __qcom_scm_paravirt_smmu_attach(__scm ? __scm->dev : NULL, sid, asid,
-					ste_pa, ste_size, cd_pa, cd_size);
-}
-EXPORT_SYMBOL(qcom_scm_paravirt_smmu_attach);
-
-int qcom_scm_paravirt_tlb_inv(u64 asid)
-{
-	return __qcom_scm_paravirt_tlb_inv(__scm ? __scm->dev : NULL, asid);
-}
-EXPORT_SYMBOL(qcom_scm_paravirt_tlb_inv);
-
-int qcom_scm_paravirt_smmu_detach(u64 sid)
-{
-	return __qcom_scm_paravirt_smmu_detach(__scm ? __scm->dev : NULL, sid);
-}
-EXPORT_SYMBOL(qcom_scm_paravirt_smmu_detach);
 
 void qcom_scm_mmu_sync(bool sync)
 {
@@ -1088,14 +1059,6 @@ int qcom_scm_qseecom_call_noretry(u32 cmd_id, struct scm_desc *desc)
 }
 EXPORT_SYMBOL(qcom_scm_qseecom_call_noretry);
 
-int qcom_scm_ddrbw_profiler(phys_addr_t in_buf,
-	size_t in_buf_size, phys_addr_t out_buf, size_t out_buf_size)
-{
-	return __qcom_scm_ddrbw_profiler(__scm ? __scm->dev : NULL, in_buf,
-			in_buf_size, out_buf, out_buf_size);
-}
-EXPORT_SYMBOL(qcom_scm_ddrbw_profiler);
-
 /**
  * qcom_scm_is_available() - Checks if SCM is available
  */
@@ -1229,7 +1192,6 @@ static void qcom_scm_shutdown(struct platform_device *pdev)
 {
 	qcom_scm_disable_sdi();
 	qcom_scm_halt_spmi_pmic_arbiter();
-	qcom_scm_set_download_mode(QCOM_DOWNLOAD_NODUMP, 0);
 }
 
 static const struct of_device_id qcom_scm_dt_match[] = {

@@ -207,12 +207,7 @@ static ssize_t store_##name(struct kobject *kobj,			\
 	unsigned int val;						\
 	struct memlat_mon *mon = to_memlat_mon(kobj);			\
 	struct memlat_cpu_grp *cpu_grp = mon->cpu_grp;			\
-	struct scmi_memlat_vendor_ops *ops = NULL;			\
-	if (cpu_grp && cpu_grp->handle &&				\
-			cpu_grp->handle->memlat_ops)			\
-		ops = cpu_grp->handle->memlat_ops;			\
-	else								\
-		return -ENODEV;						\
+	struct scmi_memlat_vendor_ops *ops = cpu_grp->handle->memlat_ops;	\
 	ret = kstrtouint(buf, 10, &val);				\
 	if (ret < 0)							\
 		return ret;						\
@@ -253,14 +248,11 @@ static ssize_t store_min_freq(struct kobject *kobj,
 	unsigned int val;
 	struct memlat_mon *mon = to_memlat_mon(kobj);
 	struct memlat_cpu_grp *cpu_grp = mon->cpu_grp;
-	struct scmi_memlat_vendor_ops *ops = NULL;
+	struct scmi_memlat_vendor_ops *ops = cpu_grp->handle->memlat_ops;
 	unsigned int min_freq;
 	unsigned int max_freq;
 
-	if (cpu_grp && cpu_grp->handle &&
-			cpu_grp->handle->memlat_ops)
-		ops = cpu_grp->handle->memlat_ops;
-	else
+	if (!ops)
 		return -ENODEV;
 
 	if (mon->mon_type == L3_MEMLAT) {
@@ -298,14 +290,11 @@ static ssize_t store_max_freq(struct kobject *kobj,
 	unsigned int val;
 	struct memlat_mon *mon = to_memlat_mon(kobj);
 	struct memlat_cpu_grp *cpu_grp = mon->cpu_grp;
-	struct scmi_memlat_vendor_ops *ops = NULL;
+	struct scmi_memlat_vendor_ops *ops = cpu_grp->handle->memlat_ops;
 	unsigned int min_freq;
 	unsigned int max_freq;
 
-	if (cpu_grp && cpu_grp->handle &&
-			cpu_grp->handle->memlat_ops)
-		ops = cpu_grp->handle->memlat_ops;
-	else
+	if (!ops)
 		return -ENODEV;
 
 	if (mon->mon_type == L3_MEMLAT) {

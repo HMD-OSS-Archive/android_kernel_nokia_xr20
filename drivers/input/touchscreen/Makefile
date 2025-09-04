@@ -121,6 +121,5 @@ obj-$(CONFIG_TOUCHSCREEN_HIMAX_CHIPSET) += HX83113A/
 #obj-$(CONFIG_TOUCHSCREEN_NT36XXX)	+= nt36xxx/
 obj-$(CONFIG_TOUCHSCREEN_FT8719_SPI) += ft8719_spi/
 ifeq ($(BUILD_PUNISHER_PROJECT),true)
-obj-y += chipone_tddi_punisher/
 obj-$(CONFIG_TOUCHSCREEN_FTS)	+= focaltech_punisher/
 endif

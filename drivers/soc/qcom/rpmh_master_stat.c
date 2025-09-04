@@ -76,6 +76,14 @@ static const struct msm_rpmh_master_data rpmh_masters[] = {
 	{"DISPLAY", DISPLAY, PID_DISPLAY},
 };
 
+struct msm_rpmh_master_stats {
+	uint32_t version_id;
+	uint32_t counts;
+	uint64_t last_entered;
+	uint64_t last_exited;
+	uint64_t accumulated_duration;
+};
+
 struct msm_rpmh_profile_unit {
 	uint64_t value;
 	uint64_t valid;
@@ -123,24 +131,19 @@ static ssize_t msm_rpmh_master_stats_show(struct kobject *kobj,
 	ssize_t length = 0;
 	int i = 0;
 	struct msm_rpmh_master_stats *record = NULL;
-	bool skip_apss = false;
 
 	mutex_lock(&rpmh_stats_mutex);
 
 	/* First Read APSS master stats */
 
-	if (rpmh_unit_base) {
+	if (rpmh_unit_base)
 		length = msm_rpmh_master_stats_print_data(buf, PAGE_SIZE,
 							  &apss_master_stats,
 							  "APSS");
-		skip_apss = true;
-	}
+
 	/* Read SMEM data written by other masters */
 
 	for (i = 0; i < ARRAY_SIZE(rpmh_masters); i++) {
-		if (skip_apss && i == 0)
-			continue;
-
 		record = (struct msm_rpmh_master_stats *) qcom_smem_get(
 					rpmh_masters[i].pid,
 					rpmh_masters[i].smem_id, NULL);
@@ -198,12 +201,6 @@ void msm_rpmh_master_stats_update(void)
 }
 EXPORT_SYMBOL(msm_rpmh_master_stats_update);
 
-struct msm_rpmh_master_stats *msm_rpmh_get_apss_data(void)
-{
-	return &apss_master_stats;
-}
-EXPORT_SYMBOL(msm_rpmh_get_apss_data);
-
 static int msm_rpmh_master_stats_probe(struct platform_device *pdev)
 {
 	struct rpmh_master_stats_prv_data *prvdata = NULL;
@@ -238,10 +235,9 @@ static int msm_rpmh_master_stats_probe(struct platform_device *pdev)
 	if (!rpmh_unit_base) {
 		pr_err("Failed to get rpmh_unit_base or rpm based target\n");
 		rpmh_unit_base = NULL;
-	} else {
-		apss_master_stats.version_id = 0x1;
 	}
 
+	apss_master_stats.version_id = 0x1;
 	platform_set_drvdata(pdev, prvdata);
 	return ret;
 
